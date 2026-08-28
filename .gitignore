@@ -12,3 +12,10 @@ __pycache__/
 pilot_results/
 manifests/
 deps/
+
+# external dependencies (setup_local.ps1 clones these)
+external/
+.venv-benchmark/
+
+# reports (generated per run)
+reports/*/

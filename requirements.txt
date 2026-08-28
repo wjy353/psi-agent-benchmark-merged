@@ -1,7 +1,11 @@
-# 本地触发与报告工具依赖
+# Terminal-Bench (remote SSH + Docker)
 paramiko>=3.0
 pyyaml>=6.0
 python-dotenv>=1.0
+# tiktoken>=0.7.0  # optional: local tokenizer estimation
 
-# 可选：如需本地解析 tokenizer 估算 token
-# tiktoken>=0.7.0
+# tau2-bench + GAIA (local execution)
+datasets
+huggingface-hub
+pandas
+pyarrow

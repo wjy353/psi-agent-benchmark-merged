@@ -1,0 +1,40 @@
+{
+  "default_subset": "level1_smoke",
+  "subsets": {
+    "level1_smoke": {
+      "description": "Fast GAIA validation smoke subset from 2023_level1.",
+      "hf_subset": "2023_level1",
+      "split": "validation",
+      "limit": 3
+    },
+    "level1_10": {
+      "description": "Small GAIA validation subset from 2023_level1.",
+      "hf_subset": "2023_level1",
+      "split": "validation",
+      "limit": 10
+    },
+    "level1_all": {
+      "description": "All GAIA 2023 level 1 validation cases.",
+      "hf_subset": "2023_level1",
+      "split": "validation"
+    },
+    "level2_10": {
+      "description": "Small GAIA validation subset from 2023_level2.",
+      "hf_subset": "2023_level2",
+      "split": "validation",
+      "limit": 10
+    },
+    "level3_10": {
+      "description": "Small GAIA validation subset from 2023_level3.",
+      "hf_subset": "2023_level3",
+      "split": "validation",
+      "limit": 10
+    },
+    "validation_30": {
+      "description": "Mixed GAIA validation sample across all levels.",
+      "hf_subset": "2023_all",
+      "split": "validation",
+      "limit": 30
+    }
+  }
+}
