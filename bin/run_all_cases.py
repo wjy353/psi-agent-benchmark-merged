@@ -122,7 +122,11 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
             cmd.extend(["--ae", f"{key}={val}"])
 
     print(f"  [harbor] {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 120)
+    # Harbor subprocess needs repo root in PYTHONPATH for adapter imports
+    env = os.environ.copy()
+    repo_root = str(Path(__file__).resolve().parent.parent)
+    env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 120, env=env)
 
     if result.returncode != 0:
         print(f"  [harbor] FAILED (rc={result.returncode})")
