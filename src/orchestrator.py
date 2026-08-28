@@ -24,8 +24,7 @@ TB_REPORTER = REPO_ROOT / "bin" / "generate_report.py"
 TAU2_GAIA_RUNNER = REPO_ROOT / "bin" / "psi_agent_benchmark.py"
 
 MANIFEST_PATHS = [
-    REPO_ROOT / "config" / "benchmark_manifest.json",
-    REPO_ROOT / "manifests" / "benchmark_manifest.json",
+    REPO_ROOT / "jobs",  # Harbor's official result.json directory
 ]
 
 REPORT_DIRS = {

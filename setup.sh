@@ -1,100 +1,75 @@
 #!/usr/bin/env bash
 # ============================================================================
-# setup.sh — 在服务器上初始化 psi-agent + Terminal-Bench 评测环境
+# setup.sh — 在服务器上初始化 Harbor + Terminal-Bench 评测环境
+#
+# harbor run 管理容器生命周期、verifier 执行和 result.json 生成。
+# 本脚本只负责：安装 harbor、拉取 case 元数据、配置 .env。
 #
 # 用法:
 #   bash setup.sh                          # 使用默认配置
 #   TB_BENCH_WORKDIR=/opt/tb bash setup.sh # 自定义工作目录
-#   PSI_AGENT_REF=feature-x bash setup.sh  # 测试指定分支
 # ============================================================================
 set -euo pipefail
 
 # ── 配置 ──────────────────────────────────────────────────────────────────
 WORKDIR="${TB_BENCH_WORKDIR:-$HOME/psi-agent-benchmark}"
-PSI_DIR="$WORKDIR/psi-agent"
 PSI_AGENT_REF="${PSI_AGENT_REF:-main}"
 PSI_AGENT_REPO="${PSI_AGENT_REPO:-https://github.com/genuineknowledge/psi-agent.git}"
+MODEL="${PSI_AI_MODEL:-glm-5.3-max}"
 
 echo "[setup] workdir: $WORKDIR"
-echo "[setup] psi-agent ref: $PSI_AGENT_REF"
+echo "[setup] model: $MODEL"
 
 mkdir -p "$WORKDIR"
 
-# ── 1. 安装 Python 依赖 ──────────────────────────────────────────────────
+# ── 1. 安装 Harbor ────────────────────────────────────────────────────────
+echo "[setup] installing harbor..."
+if ! command -v harbor &>/dev/null; then
+    pip3 install harbor-ai 2>/dev/null \
+        || pip install harbor-ai 2>/dev/null \
+        || (curl -LsSf https://astral.sh/uv/install.sh | sh && uv tool install harbor)
+fi
+echo "[setup] harbor: $(harbor --version 2>&1 || echo 'NOT FOUND')"
+
+# ── 2. 安装 Python 依赖 ──────────────────────────────────────────────────
 echo "[setup] installing Python dependencies..."
 pip3 install -r "$WORKDIR/requirements.txt" 2>/dev/null \
-    || echo "[setup] pip3 not available, skipping Python dependencies"
+    || echo "[setup] WARNING: some Python dependencies may be missing"
 
-# ── 2. 拉取 psi-agent 并切换到指定版本 ───────────────────────────────────
-if [ ! -d "$PSI_DIR/.git" ]; then
-    echo "[setup] cloning psi-agent from $PSI_AGENT_REPO..."
-    git clone "$PSI_AGENT_REPO" "$PSI_DIR"
-fi
-
-cd "$PSI_DIR"
-git fetch origin
-git checkout "$PSI_AGENT_REF"
-git pull origin "$PSI_AGENT_REF" || true
+# ── 3. 拉取 case 元数据 ──────────────────────────────────────────────────
+echo "[setup] fetching case metadata..."
 cd "$WORKDIR"
+python3 bin/fetch_cases.py 2>/dev/null \
+    || echo "[setup] WARNING: could not fetch case metadata (run bin/fetch_cases.py manually)"
 
-echo "[setup] psi-agent commit: $(cd "$PSI_DIR" && git rev-parse --short HEAD)"
+# ── 4. 部署 workspace ─────────────────────────────────────────────────────
+mkdir -p "$WORKDIR/workspaces/terminal_bench"
+echo "[setup] workspace at $WORKDIR/workspaces/terminal_bench"
 
-# ── 3. 部署脚本和配置到 psi-agent 目录 ──────────────────────────────────
-echo "[setup] deploying scripts to psi-agent..."
-# 安装 psi-agent 包（editable 模式，确保 import 可用）
-cd "$PSI_DIR"
-uv pip install -e . 2>/dev/null || pip install -e . 2>/dev/null || echo "[setup] WARNING: could not install psi-agent package"
-cd "$WORKDIR"
-
-cp "$WORKDIR/bin/run_all_cases.py"   "$PSI_DIR/run_all_cases.py"
-cp "$WORKDIR/bin/generate_report.py" "$PSI_DIR/generate_report.py"
-cp "$WORKDIR/bin/fetch_cases.py"     "$PSI_DIR/fetch_cases.py"
-cp "$WORKDIR/build_images.sh"        "$PSI_DIR/build_images.sh"
-chmod +x "$PSI_DIR/build_images.sh"
-
-# 部署容器管理模块（复制到 psi-agent 的 src/，与 psi_agent/ 包共存）
-cp "$WORKDIR/src/container.py" "$PSI_DIR/src/container.py"
-echo "[setup] deployed container.py to $PSI_DIR/src/container.py"
-cp "$WORKDIR/src/case_source.py" "$PSI_DIR/src/case_source.py"
-echo "[setup] deployed case_source.py to $PSI_DIR/src/case_source.py"
-
-mkdir -p "$WORKDIR/manifests"
-cp "$WORKDIR/config/case_metadata.json" "$WORKDIR/manifests/case_metadata.json"
-
-cp "$WORKDIR/bin/run_benchmark.sh" "$PSI_DIR/run_benchmark.sh"
-chmod +x "$PSI_DIR/run_benchmark.sh"
-
-# ── 3. 部署容器版 workspace — 工具通过 PSI_PILOT_CONTAINER env 操作 Docker 容器
-rm -rf "$PSI_DIR/examples/terminal_bench"
-cp -r "$WORKDIR/workspaces/terminal_bench" "$PSI_DIR/examples/terminal_bench"
-cp "$WORKDIR/src/container.py" "$PSI_DIR/src/container.py"
-echo "[setup] deployed container workspace to $PSI_DIR/examples/terminal_bench"
-
-# ── 4. 环境变量配置 ──────────────────────────────────────────────────────
+# ── 5. 环境变量配置 ──────────────────────────────────────────────────────
 if [ ! -f "$WORKDIR/.env" ]; then
-    cp "$WORKDIR/config/.env.example" "$WORKDIR/.env"
+    cat > "$WORKDIR/.env" << ENV_EXAMPLE
+PSI_AI_PROVIDER=openai
+PSI_AI_MODEL=$MODEL
+PSI_AI_API_KEY=your-api-key-here
+PSI_AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+PSI_AGENT_REPO=$PSI_AGENT_REPO
+PSI_AGENT_REF=$PSI_AGENT_REF
+PSI_AGENT_WORKSPACE=$WORKDIR/workspaces/terminal_bench
+ENV_EXAMPLE
     echo "[setup] created $WORKDIR/.env — please edit it with real credentials"
 fi
-# 复制到 psi-agent 目录，确保 run_all_cases.py 能直接读取
-cp "$WORKDIR/.env" "$PSI_DIR/.env"
 
-# ── 5. 预检：harbor / docker ─────────────────────────────────────────────
-HARBOR_BIN="${TB_HARBOR_BIN:-harbor}"
-if command -v "$HARBOR_BIN" &>/dev/null; then
-    echo "[setup] harbor: $($HARBOR_BIN --version 2>&1 || echo 'found')"
-else
-    echo "[setup] WARNING: harbor not found — install Terminal-Bench CLI to build images"
-    echo "[setup]   pip install terminal-bench"
-fi
-
+# ── 6. 预检：Docker ──────────────────────────────────────────────────────
 if docker ps &>/dev/null; then
-    echo "[setup] docker: OK"
+    echo "[setup] docker: $(docker --version)"
+    echo "[setup] docker daemon: running"
 else
-    echo "[setup] WARNING: docker not accessible — ensure user is in docker group"
+    echo "[setup] WARNING: docker daemon not running — harbor needs Docker"
 fi
 
 echo ""
 echo "[setup] done. Next steps:"
-echo "  1. edit $WORKDIR/.env"
-echo "  2. bash $WORKDIR/build_images.sh"
-echo "  3. bash $PSI_DIR/run_benchmark.sh"
+echo "  1. Edit .env with your API key"
+echo "  2. python benchmark.py run -b tb-3.0 --limit 2 --run-id smoke"
+echo "  3. python benchmark.py report -b tb-3.0 --run-id smoke"

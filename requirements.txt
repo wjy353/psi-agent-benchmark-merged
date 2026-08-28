@@ -1,8 +1,7 @@
-# Terminal-Bench (remote SSH + Docker)
-paramiko>=3.0
+# Harbor (Terminal-Bench official evaluation)
+harbor-ai
 pyyaml>=6.0
 python-dotenv>=1.0
-# tiktoken>=0.7.0  # optional: local tokenizer estimation
 
 # tau2-bench + GAIA (local execution)
 datasets

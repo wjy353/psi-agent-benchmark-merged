@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate a benchmark report from manifest + logs with detailed error analysis.
+"""Generate a benchmark report from Harbor result.json files with detailed error analysis.
+
+Reads official Harbor result.json (not a custom manifest) and produces
+a per-version report. Harbor handles container lifecycle, verifier execution,
+and result.json generation — this script only reads and formats.
 
 Sections:
   一、综合打分
@@ -8,13 +12,17 @@ Sections:
   四、按领域统计
   五、详细结果
   六、Case 运行中间结果
-  七、错误分析（新增）
-    - 7.1 失败原因分类总览
+  七、错误分析
+    - 7.1 失败原因分类总览（含官方 failure_tags）
     - 7.2 各 case 错误详情
     - 7.3 工具调用统计
     - 7.4 Skills/Tools 优化建议
+
+  TB 3.0 额外:
+  八、多容器隔离审计
 """
 
+import argparse
 import json
 import os
 import re
@@ -24,7 +32,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 WORKDIR = Path(os.environ.get("TB_BENCH_WORKDIR", f"{os.environ.get('HOME', '/root')}/psi-agent-benchmark"))
-MANIFEST_JSON = WORKDIR / "config" / "benchmark_manifest.json"
+JOBS_DIR = WORKDIR / "jobs"
 METADATA_JSON = WORKDIR / "config" / "case_metadata.json"
 RESULTS_DIR = WORKDIR / "pilot_results"
 CHARS_PER_TOKEN = 4.0
@@ -685,41 +693,169 @@ def render_group_table(cases, group_key, group_values, label):
     return lines
 
 
-def generate(output_path=None, manifest_path=None):
-    manifest_src = Path(manifest_path) if manifest_path else MANIFEST_JSON
-    manifest = json.loads(read_text(manifest_src, "{}"))
-    metadata = json.loads(read_text(METADATA_JSON, "{}"))
-    meta = manifest.pop("_meta", {}) if "_meta" in manifest else {}
+def load_harbor_results(run_id, version_filter=None):
+    """Load results from Harbor's official result.json files.
 
+    Scans jobs/<run_id>/ for result.json files produced by `harbor run`.
+    Each result.json contains: reward, success, failure_tags, parser_results,
+    token_usage, elapsed_time, cost — all official Terminal-Bench fields.
+    """
+    run_dir = JOBS_DIR / run_id
+    if not run_dir.exists():
+        print(f"[ERROR] Run directory not found: {run_dir}")
+        print(f"        Available runs: {[d.name for d in JOBS_DIR.iterdir() if d.is_dir()] if JOBS_DIR.exists() else '(none)'}")
+        sys.exit(1)
+
+    metadata = json.loads(read_text(METADATA_JSON, "{}"))
     cases = []
-    for key, item in manifest.items():
-        name = item.get("name", key.split("/")[-1])
-        version = item.get("version", "")
-        md = metadata.get(key, {})
-        domain = md.get("domain", item.get("domain", ""))
-        difficulty = md.get("difficulty", item.get("difficulty", ""))
-        tokens = estimate_tokens(name)
+    order = 0
+
+    for result_path in sorted(run_dir.rglob("result.json")):
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        task_id = result.get("task_id", result_path.parent.name)
+        name = task_id.split("/")[-1]
+
+        # Determine version from metadata or task_id
+        md = metadata.get(task_id, {})
+        version = md.get("version", "3.0" if "3.0" in task_id else "2.1")
+        if version_filter and version != version_filter:
+            continue
+
+        domain = md.get("domain", "")
+        difficulty = md.get("difficulty", "")
+
+        # Map Harbor's official fields to our report structure
+        reward = result.get("reward")
+        if reward is None and "success" in result:
+            reward = 1.0 if result["success"] else 0.0
+
+        token_usage = result.get("token_usage", {})
+        if isinstance(token_usage, dict):
+            input_tokens = token_usage.get("input", token_usage.get("prompt_tokens", 0))
+            output_tokens = token_usage.get("output", token_usage.get("completion_tokens", 0))
+            total_tokens = token_usage.get("total", token_usage.get("total_tokens",
+                              input_tokens + output_tokens))
+        else:
+            input_tokens = output_tokens = total_tokens = 0
+
+        # Find the job's log directory for session/agent logs
+        job_log_dir = result_path.parent
+        tokens = estimate_tokens_from_logs(name, job_log_dir)
+        if tokens["total_tokens"] > 0:
+            input_tokens = tokens["input_tokens"] or input_tokens
+            output_tokens = tokens["output_tokens"] or output_tokens
+            total_tokens = tokens["total_tokens"] or total_tokens
+
         cases.append({
-            "order": item.get("order", 0),
-            "key": key,
+            "order": order,
+            "key": task_id,
             "version": version,
             "name": name,
             "domain": domain,
             "difficulty": difficulty,
-            "agent_status": item.get("agent_status", ""),
-            "reward": item.get("reward", ""),
-            "elapsed_sec": item.get("elapsed_sec", 0) or 0,
-            "requests": tokens["requests"],
-            "session_chars": tokens["session_chars"],
-            "output_chars": tokens["output_chars"],
-            "input_tokens": tokens["input_tokens"],
-            "output_tokens": tokens["output_tokens"],
-            "total_tokens": tokens["total_tokens"],
-            "token_source": tokens["token_source"],
-            "result_dir": item.get("result_dir", str(RESULTS_DIR / name)),
+            "agent_status": "completed" if reward is not None else "unknown",
+            "reward": reward if reward is not None else "",
+            "elapsed_sec": result.get("elapsed_time", 0) or 0,
+            "requests": tokens.get("requests", 0),
+            "session_chars": tokens.get("session_chars", 0),
+            "output_chars": tokens.get("output_chars", 0),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "token_source": tokens.get("token_source", "harbor"),
+            "result_dir": str(job_log_dir),
+            "failure_tags": result.get("failure_tags", []),
+            "parser_results": result.get("parser_results", {}),
+            "cost_usd": result.get("cost", 0) or 0,
         })
+        order += 1
 
-    cases.sort(key=lambda x: x["order"])
+    return cases
+
+
+def estimate_tokens_from_logs(name, log_dir):
+    """Estimate tokens from session/agent logs in the job directory."""
+    ai_log = Path(log_dir) / "ai.log"
+    session_log = Path(log_dir) / "session.log"
+    agent_out = Path(log_dir) / "agent_output.log"
+
+    ai_text = read_text(ai_log, "")
+    requests = ai_text.count("Request completed successfully")
+    session_chars = count_chars(session_log)
+    output_chars = count_chars(agent_out)
+
+    real = None
+    inp = out = tot = 0
+    n = 0
+    for m in USAGE_RE.finditer(ai_text):
+        inp += int(m.group(1))
+        out += int(m.group(2))
+        tot += int(m.group(3))
+        n += 1
+    if n > 0:
+        real = {"input": inp, "output": out, "total": tot, "requests": n}
+
+    if real:
+        return {
+            "requests": real["requests"],
+            "session_chars": session_chars,
+            "output_chars": output_chars,
+            "input_tokens": real["input"],
+            "output_tokens": real["output"],
+            "total_tokens": real["total"],
+            "token_source": "实测",
+        }
+
+    input_tokens = int(session_chars * requests / 2 / CHARS_PER_TOKEN) if requests else 0
+    output_tokens = int(output_chars / CHARS_PER_TOKEN)
+    return {
+        "requests": requests,
+        "session_chars": session_chars,
+        "output_chars": output_chars,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "token_source": "估算",
+    }
+
+
+def generate(output_path=None, run_id=None, version=None):
+    """Generate report from Harbor result.json files.
+
+    Args:
+        output_path: Path to write the report markdown.
+        run_id: Harbor job run ID (directory under jobs/).
+        version: Filter by TB version ("2.1" or "3.0"). None = all.
+    """
+    if not run_id:
+        # Auto-detect latest run
+        if JOBS_DIR.exists():
+            runs = sorted(JOBS_DIR.iterdir(), reverse=True)
+            run_id = runs[0].name if runs else None
+        if not run_id:
+            print("[ERROR] No run_id specified and no jobs found.")
+            print(f"        Jobs directory: {JOBS_DIR}")
+            sys.exit(1)
+        print(f"[INFO] Auto-detected latest run: {run_id}")
+
+    metadata = json.loads(read_text(METADATA_JSON, "{}"))
+
+    cases = load_harbor_results(run_id, version_filter=version)
+    if not cases:
+        print(f"[ERROR] No cases found for run_id={run_id}, version={version}")
+        sys.exit(1)
+
+    # Determine report version label
+    if version:
+        version_label = f"TB {version}"
+        report_suffix = f"tb-{version}"
+    else:
+        version_label = "TB (all versions)"
+        report_suffix = "tb-all"
     total_cases = len(cases)
     completed_cases = sum(1 for c in cases if not is_unknown(c["reward"]))
     pass_cases = sum(1 for c in cases if is_pass(c["reward"]))
@@ -755,11 +891,11 @@ def generate(output_path=None, manifest_path=None):
     }
 
     lines = []
-    lines.append("# TB 2.1/3.0 Benchmark 数据报告\n")
+    lines.append(f"# {version_label} Benchmark 数据报告\n")
     lines.append(f"> 生成时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-    lines.append(f"> Agent 版本：`{meta.get('agent_version', 'unknown')}`\n")
-    lines.append(f"> 模型：`{meta.get('model', 'unknown')}`\n")
-    lines.append(f"> 运行起止：{meta.get('start_time', '-')} ~ {meta.get('end_time', '-')}\n")
+    lines.append(f"> Run ID：`{run_id}`\n")
+    lines.append(f"> 模型：`{os.environ.get('PSI_AI_MODEL', 'unknown')}`\n")
+    lines.append(f"> 数据来源：Harbor 官方 result.json\n")
     lines.append(f"> 总耗时：{format_elapsed(elapsed)}\n")
     lines.append("\n---\n")
 
@@ -833,22 +969,21 @@ def generate(output_path=None, manifest_path=None):
     report = "\n".join(lines)
 
     if output_path is None:
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        output_path = RESULTS_DIR / f"benchmark_report_{ts}.md"
+        output_path = WORKDIR / "reports" / report_suffix / run_id / "report.md"
     else:
         output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
-    # 仅打印裸路径，供 run_benchmark.sh / trigger_benchmark.py 解析下载
     print(str(output_path))
     return output_path
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="从 manifest 生成评测报告（含错误分析）")
-    parser.add_argument("--out", default=None,
-                        help="输出 markdown 路径（默认：results 下时间戳命名）")
-    parser.add_argument("--manifest", default=None,
-                        help="manifest JSON 路径（默认：manifests/benchmark_manifest.json）")
+    parser = argparse.ArgumentParser(description="Generate TB report from Harbor result.json")
+    parser.add_argument("--run-id", default=None, help="Harbor job run ID (auto-detect if omitted)")
+    parser.add_argument("--version", choices=["2.1", "3.0"], default=None,
+                        help="Filter by TB version (generates separate report)")
+    parser.add_argument("--output", default=None, help="Output path (default: reports/<version>/<run_id>/report.md)")
     args = parser.parse_args()
-    generate(args.out, manifest_path=args.manifest)
+
+    generate(output_path=args.output, run_id=args.run_id, version=args.version)

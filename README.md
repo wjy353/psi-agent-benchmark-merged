@@ -1,11 +1,11 @@
 # psi-agent-benchmark
 
-HaiTun（psi-agent）统一评测工具。支持四条独立评测线，每条线单独生成报告：
+HaiTun（psi-agent）统一评测工具。TB 通过 Harbor 官方流程评测，直接产出官方 `result.json`。
 
 | Benchmark | 测什么 | 执行方式 | 打分 |
 |---|---|---|---|
-| **TB 2.1** | 终端任务（容器内） | 远程 SSH → Docker | 二值 0/1（verifier=same） |
-| **TB 3.0** | 终端任务（容器隔离） | 远程 SSH → Docker | 二值 0/1（verifier=separate） |
+| **TB 2.1** | 终端任务（容器内） | `harbor run` + psi-agent adapter | 官方 result.json（success, failure_tags, parser_results） |
+| **TB 3.0** | 终端任务（容器隔离） | `harbor run` + psi-agent adapter | 官方 result.json（+ 多容器隔离审计） |
 | **tau2** | 多轮对话任务 | 本地 adapter → tau2-bench | 多维（reward + db_check + assertion） |
 | **GAIA** | 通用研究能力 | 本地 workspace | 连续 0.0-1.0（exact match） |
 
@@ -18,14 +18,27 @@ git clone https://github.com/hys070414/psi-agent-benchmark-merged.git
 cd psi-agent-benchmark-merged
 ```
 
-### 2. 配置远程服务器（TB 2.1/3.0 需要）
+### 2. 安装 Harbor
+
+```bash
+uv tool install harbor
+# 或
+pip install harbor-ai
+```
+
+### 3. 配置环境
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入服务器 IP 和 SSH 私钥路径
+# 编辑 .env，填入：
+#   PSI_AI_API_KEY=你的智谱 API Key
+#   PSI_AI_MODEL=glm-5.3-max
+#   PSI_AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+#   PSI_AGENT_REPO=https://github.com/genuineknowledge/psi-agent.git
+#   PSI_AGENT_WORKSPACE=workspaces/terminal_bench
 ```
 
-### 3. 配置本地环境（tau2/GAIA 需要）
+### 4. 配置本地环境（tau2/GAIA 需要）
 
 ```powershell
 .\setup_local.ps1
@@ -84,12 +97,12 @@ python benchmark.py schema   -b <同上>                          # 查看数据
 
 用 `python benchmark.py schema -b all` 查看完整 schema。
 
-| Benchmark | 独有字段 | 报告章节 |
-|---|---|---|
-| tb-2.1 | verifier_stdout, verifier_stderr | 6 章（总分/难度/领域/详情/中间结果/错误分析） |
-| tb-3.0 | + docker_cp_path, overlay_image, bind_mount_path | 7 章（多容器隔离审计） |
-| tau2 | db_check_pass, assertion_pass, user_messages, tool_calls | 5 章（含失败快照） |
-| gaia | score(0-1), is_correct, file_count, search_count | 5 章（按 level 分组） |
+| Benchmark | 数据来源 | 独有字段 | 报告章节 |
+|---|---|---|---|
+| tb-2.1 | Harbor 官方 result.json | failure_tags, parser_results | 7 章（+错误分析） |
+| tb-3.0 | Harbor 官方 result.json | + 容器隔离审计字段 | 8 章（+多容器隔离审计） |
+| tau2 | tau2-bench | db_check_pass, assertion_pass, user_messages | 5 章（含失败快照） |
+| gaia | GAIA scorer | score(0-1), is_correct, file_count, search_count | 5 章（按 level 分组） |
 
 ## 报告目录
 
@@ -106,13 +119,18 @@ reports/
 ```
 ├── benchmark.py               # 统一 CLI 入口
 ├── src/orchestrator.py         # 四线调度器
+├── adapters/
+│   ├── terminal_bench/
+│   │   └── harbor_agent.py     # psi-agent → Harbor 适配器（TB 核心）
+│   └── tau2/
+│       └── psi_agent_adapter.py # psi-agent → tau2 桥接
 ├── setup_local.ps1             # 本地环境配置（tau2/GAIA）
-├── setup.sh                    # 服务器初始化（TB）
+├── setup.sh                    # 服务器初始化（harbor + Docker）
 ├── requirements.txt            # 合并依赖
 │
 ├── bin/                        # 所有脚本（TB + tau2 + GAIA）
-│   ├── run_all_cases.py        # TB 评测主控
-│   ├── generate_report.py      # TB 报告生成
+│   ├── run_all_cases.py        # TB 批量调用 harbor run
+│   ├── generate_report.py      # TB 报告生成（读 Harbor result.json）
 │   ├── fetch_cases.py          # TB case 拉取
 │   ├── trigger_benchmark.py    # TB 远程触发
 │   ├── fetch_report.py         # TB 报告拉取
