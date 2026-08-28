@@ -55,17 +55,22 @@ MODEL = os.environ.get("PSI_AI_MODEL", "glm-5.3-max")
 def load_cases(versions=None, cases=None, exclude=None, difficulties=None, limit=None):
     """Load and filter cases from case_metadata.json."""
     if not CASE_META.exists():
-        print(f"[ERROR] {CASE_META} not found. Run fetch_cases.py first.")
+        print(f"[ERROR] {CASE_META} not found. Run bin/fetch_cases.py first.")
         sys.exit(1)
 
     with open(CASE_META, encoding="utf-8") as f:
         meta = json.load(f)
 
-    all_cases = meta.get("cases", [])
-    selected = []
+    # case_metadata.json is { "version/name": {name, version, ...}, ... }
+    if isinstance(meta, dict):
+        all_cases = list(meta.values())
+    else:
+        all_cases = meta.get("cases", [])
 
+    selected = []
     for c in all_cases:
-        if not c.get("enabled", True):
+        # Skip disabled cases only when not targeting specific cases
+        if not cases and not c.get("enabled", True):
             continue
         ver = c.get("version", "2.1")
         if versions and ver not in versions:
