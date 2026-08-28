@@ -1,6 +1,6 @@
 # psi-agent-benchmark
 
-HaiTun（psi-agent）统一评测工具。TB 通过 Harbor 官方流程评测，直接产出官方 `result.json`。
+HaiTun（psi-agent）统一评测工具。
 
 | Benchmark | 测什么 | 执行方式 | 打分 |
 |---|---|---|---|
