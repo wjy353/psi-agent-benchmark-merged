@@ -83,14 +83,14 @@ class PsiAgent(BaseInstalledAgent):
             command=f"rm -rf {PSI_HOME} && git clone --depth 1 --branch {ref} {repo} {PSI_HOME}",
         )
 
-        # 3. Install psi-agent (uv handles Python 3.14)
+        # 3. Create venv with Python 3.14 and install psi-agent
         await self.exec_as_agent(
             environment,
-            command=(
-                f"cd {PSI_HOME} && "
-                "UV_NO_DOWNLOAD_INTERPRETER=1 "
-                f"uv pip install -e . --python 3.14"
-            ),
+            command=f"cd {PSI_HOME} && uv venv --python 3.14",
+        )
+        await self.exec_as_agent(
+            environment,
+            command=f"cd {PSI_HOME} && UV_NO_DOWNLOAD_INTERPRETER=1 uv pip install -e .",
         )
 
         # 4. Copy workspace tools into container
