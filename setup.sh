@@ -46,10 +46,10 @@ cd "$PSI_DIR"
 uv pip install -e . 2>/dev/null || pip install -e . 2>/dev/null || echo "[setup] WARNING: could not install psi-agent package"
 cd "$WORKDIR"
 
-cp "$WORKDIR/run_all_cases.py"   "$PSI_DIR/run_all_cases.py"
-cp "$WORKDIR/generate_report.py" "$PSI_DIR/generate_report.py"
-cp "$WORKDIR/fetch_cases.py"     "$PSI_DIR/fetch_cases.py"
-cp "$WORKDIR/build_images.sh"    "$PSI_DIR/build_images.sh"
+cp "$WORKDIR/bin/run_all_cases.py"   "$PSI_DIR/run_all_cases.py"
+cp "$WORKDIR/bin/generate_report.py" "$PSI_DIR/generate_report.py"
+cp "$WORKDIR/bin/fetch_cases.py"     "$PSI_DIR/fetch_cases.py"
+cp "$WORKDIR/build_images.sh"        "$PSI_DIR/build_images.sh"
 chmod +x "$PSI_DIR/build_images.sh"
 
 # 部署容器管理模块（复制到 psi-agent 的 src/，与 psi_agent/ 包共存）

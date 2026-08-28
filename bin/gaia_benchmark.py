@@ -19,7 +19,7 @@ from typing import Any
 
 
 BENCHMARK_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_GAIA_CONFIG = BENCHMARK_ROOT / "configs" / "gaia_subsets.json"
+DEFAULT_GAIA_CONFIG = BENCHMARK_ROOT / "config" / "gaia_subsets.json"
 DEFAULT_GAIA_DATA_ROOT = BENCHMARK_ROOT / "data" / "GAIA"
 DEFAULT_GAIA_REPORT_ROOT = BENCHMARK_ROOT / "reports" / "gaia-psi-agent"
 DEFAULT_GAIA_REPO_ID = "ycyc666/GAIA-bucket"

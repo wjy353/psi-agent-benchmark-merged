@@ -110,19 +110,27 @@ reports/
 ├── setup.sh                    # 服务器初始化（TB）
 ├── requirements.txt            # 合并依赖
 │
-├── bin/                        # 远程触发脚本（TB）
-├── config/                     # TB 配置（case_metadata.json, benchmark.yaml）
-├── configs/                    # tau2/GAIA 子集配置
-├── scripts/                    # tau2/GAIA 脚本
+├── bin/                        # 所有脚本（TB + tau2 + GAIA）
+│   ├── run_all_cases.py        # TB 评测主控
+│   ├── generate_report.py      # TB 报告生成
+│   ├── fetch_cases.py          # TB case 拉取
+│   ├── trigger_benchmark.py    # TB 远程触发
+│   ├── fetch_report.py         # TB 报告拉取
+│   ├── psi_agent_benchmark.py  # tau2/GAIA runner
+│   ├── gaia_benchmark.py       # GAIA runner
+│   └── generate_tau2_report.py # tau2 报告
+├── config/                     # 所有配置（TB + tau2 + GAIA）
+│   ├── benchmark.yaml
+│   ├── case_metadata.json
+│   ├── tau2_subsets.json
+│   └── gaia_subsets.json
 ├── adapters/                   # tau2 适配器
+│   └── tau2/psi_agent_adapter.py
 │
 ├── workspaces/
-│   ├── terminal_bench/         # TB workspace（bash/read/write/edit 工具）
+│   ├── terminal_bench/         # TB workspace
 │   └── gaia/                   # GAIA workspace
 │
-├── run_all_cases.py            # TB 评测主控
-├── generate_report.py          # TB 报告生成
-├── fetch_cases.py              # TB case 拉取
 └── build_images.sh             # Docker 镜像构建
 ```
 
@@ -144,8 +152,8 @@ PSI_ROOT=C:\Users\...\psi-agent-main
 TAU2_ROOT=external/tau2-bench
 GAIA_DATA_ROOT=external/gaia-data
 PSI_AI_PROVIDER=openai
-PSI_AI_MODEL=deepseek-chat
-PSI_AI_BASE_URL=https://api.deepseek.com/v1
+PSI_AI_MODEL=glm-5.3-max
+PSI_AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ```
 
 ## 定时自动跑（可选）

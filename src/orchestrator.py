@@ -19,9 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 BENCHMARKS = ["tb-2.1", "tb-3.0", "tau2", "gaia", "all"]
 
-TB_RUNNER = REPO_ROOT / "run_all_cases.py"
-TB_REPORTER = REPO_ROOT / "generate_report.py"
-TAU2_GAIA_RUNNER = REPO_ROOT / "scripts" / "psi_agent_benchmark.py"
+TB_RUNNER = REPO_ROOT / "bin" / "run_all_cases.py"
+TB_REPORTER = REPO_ROOT / "bin" / "generate_report.py"
+TAU2_GAIA_RUNNER = REPO_ROOT / "bin" / "psi_agent_benchmark.py"
 
 MANIFEST_PATHS = [
     REPO_ROOT / "config" / "benchmark_manifest.json",

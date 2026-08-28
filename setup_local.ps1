@@ -111,13 +111,13 @@ UV_PATH=$(Get-Command uv).Source
 # GAIA
 GAIA_DATA_ROOT=$GaiaDataRoot
 
-# DeepSeek API (shared with remote TB)
+# GLM API (shared with remote TB)
 PSI_AI_PROVIDER=openai
-PSI_AI_MODEL=deepseek-chat
-PSI_AI_BASE_URL=https://api.deepseek.com/v1
+PSI_AI_MODEL=glm-5.3-max
+PSI_AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 
 # tau2 user simulator
-TAU2_USER_LLM=deepseek/deepseek-chat
+TAU2_USER_LLM=glm-5.3-max
 "@
 Set-Content -Path $envFile -Value $envContent -Encoding UTF8
 Write-Host "  .env.local written to $envFile" -ForegroundColor Green

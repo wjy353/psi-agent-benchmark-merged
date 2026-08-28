@@ -1,7 +1,7 @@
 # Terminal-Bench benchmark 配置
 # 唯一的数据源是 case_metadata.json，本文件只存运行时参数
 
-model: deepseek-v4-flash
+model: glm-5.3-max
 
 # 超时设置（秒）
 timeout:
