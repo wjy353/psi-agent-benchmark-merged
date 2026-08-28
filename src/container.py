@@ -9,7 +9,7 @@ full tty / env / cwd / signal semantics.
 
 Mount layout inside the container:
   /opt/psi-agent                  -> psi-agent source (uv project) + venv symlinks
-  /opt/psi-agent/workspace        -> tb-pilot-workspace
+  /opt/psi-agent/workspace        -> terminal_bench workspace
   /opt/psi-agent/task             -> task.toml + instruction.md (read-only)
   /opt/psi-agent/results          -> per-case result dir (logs are written here)
   /tmp/psi-socks                  -> ai/session unix sockets
@@ -165,7 +165,7 @@ def start_env_container(container_name, image_tag, *,
         "-v", "/logs/verifier",
         # ── psi-agent runtime (source + uv venv) ──
         "-v", f"{psi_dir}:{PSI_IN_CONTAINER}:rw",
-        # ── tb-pilot-workspace (local version takes precedence) ──
+        # ── terminal_bench workspace (local version takes precedence) ──
         "-v", f"{workspace_dir}:{WORKSPACE_IN_CONTAINER}:ro",
         # ── task instruction + task.toml ──
         "-v", f"{task_dir}:{TASK_IN_CONTAINER}:ro",

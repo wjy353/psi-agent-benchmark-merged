@@ -64,12 +64,11 @@ cp "$WORKDIR/config/case_metadata.json" "$WORKDIR/manifests/case_metadata.json"
 cp "$WORKDIR/bin/run_benchmark.sh" "$PSI_DIR/run_benchmark.sh"
 chmod +x "$PSI_DIR/run_benchmark.sh"
 
-# 部署容器版 workspace — 工具通过 PSI_PILOT_CONTAINER env 操作 Docker 容器
-rm -rf "$PSI_DIR/examples/tb-pilot-workspace"
-rm -rf "$PSI_DIR/examples/tb-pilot-workspace"
-cp -r "$WORKDIR/tb-pilot-workspace" "$PSI_DIR/examples/tb-pilot-workspace"
+# ── 3. 部署容器版 workspace — 工具通过 PSI_PILOT_CONTAINER env 操作 Docker 容器
+rm -rf "$PSI_DIR/examples/terminal_bench"
+cp -r "$WORKDIR/workspaces/terminal_bench" "$PSI_DIR/examples/terminal_bench"
 cp "$WORKDIR/src/container.py" "$PSI_DIR/src/container.py"
-echo "[setup] deployed container workspace to $PSI_DIR/examples/tb-pilot-workspace"
+echo "[setup] deployed container workspace to $PSI_DIR/examples/terminal_bench"
 
 # ── 4. 环境变量配置 ──────────────────────────────────────────────────────
 if [ ! -f "$WORKDIR/.env" ]; then

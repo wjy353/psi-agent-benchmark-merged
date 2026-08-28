@@ -49,12 +49,12 @@ CONFIG_PATH = WORKDIR / "config" / "benchmark.yaml"
 PSI_DIR = WORKDIR / "psi-agent"
 HARBOR_BIN = os.environ.get("TB_HARBOR_BIN", "harbor")
 UV_BIN = os.environ.get("TB_UV_BIN", "uv")
-WORKSPACE = "examples/tb-pilot-workspace"
-# Path to the tb-pilot-workspace *source* directory on the host (before it is
+WORKSPACE = "examples/terminal_bench"
+# Path to the terminal_bench workspace *source* directory on the host (before it is
 # copied into psi-agent/examples/ by setup.sh). We resolve it relative to the
 # benchmark project root so `docker run -v` can mount it into the container as
 # /opt/psi-agent/workspace.
-WORKSPACE_DIR = WORKDIR / "tb-pilot-workspace"
+WORKSPACE_DIR = WORKDIR / "workspaces" / "terminal_bench"
 
 
 # ── 日志 ───────────────────────────────────────────────────────────────────

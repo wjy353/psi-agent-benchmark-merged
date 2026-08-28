@@ -1,105 +1,159 @@
 # psi-agent-benchmark
 
-Haitun（psi-agent）Terminal-Bench 一键评测工具。把 TB 2.1 / 3.0 的 case 推到远程服务器用 Docker 跑，跑完自动生成报告并下载到本地。
+HaiTun（psi-agent）统一评测工具。支持四条独立评测线，每条线单独生成报告：
 
-## 准备工作
+| Benchmark | 测什么 | 执行方式 | 打分 |
+|---|---|---|---|
+| **TB 2.1** | 终端任务（容器内） | 远程 SSH → Docker | 二值 0/1（verifier=same） |
+| **TB 3.0** | 终端任务（容器隔离） | 远程 SSH → Docker | 二值 0/1（verifier=separate） |
+| **tau2** | 多轮对话任务 | 本地 adapter → tau2-bench | 多维（reward + db_check + assertion） |
+| **GAIA** | 通用研究能力 | 本地 workspace | 连续 0.0-1.0（exact match） |
 
-- 一台装了 Docker 的境外 Linux 服务器（用户需在 docker 组）。
-- 本机装 harbor：`pip install terminal-bench`。
-- DeepSeek API Key 放在**服务器**的 `psi-agent/.env` 里，不在你本机。
+## 快速开始
 
-## 三步跑起来
-
-1. 克隆并进入目录：
+### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/hys070414/psi-agent-benchmark.git
-cd psi-agent-benchmark
+git clone https://github.com/hys070414/psi-agent-benchmark-merged.git
+cd psi-agent-benchmark-merged
 ```
 
-2. 配置本机客户端（只管怎么连上服务器）：
+### 2. 配置远程服务器（TB 2.1/3.0 需要）
 
 ```bash
 cp .env.example .env
+# 编辑 .env，填入服务器 IP 和 SSH 私钥路径
 ```
 
-打开 `.env`，填服务器的 IP 和你本机的 SSH 私钥路径。这个文件只被 `trigger`/`fetch` 两个脚本读取，用来 SSH 进服务器，**不需要也不该放 DeepSeek Key**。
+### 3. 配置本地环境（tau2/GAIA 需要）
 
-3. 跑评测并自动拿报告：
-
-```bash
-python bin/trigger_benchmark.py --cases 3.0/bun-sourcemap-leak --wait
+```powershell
+.\setup_local.ps1
+# 自动安装 uv + Python 3.14 + psi-agent + tau2-bench + GAIA 数据
 ```
 
-`--wait` 会在服务器上跑完评测、生成报告，再把报告自动下载到本地 `reports/`。这就是完整闭环，中间不用你动手。
-
-## 选哪些 case
-
-不加筛选参数时，跑 `config/case_metadata.json` 里标记为 `enabled=true` 的 30 个。
-
-| 参数 | 作用 |
-|------|------|
-| `--cases fix-git,caffe-cifar-10` | 精确指定，支持 `version/name` 或纯 name |
-| `--versions 2.1,3.0` | 按版本筛 |
-| `--difficulties 易,中,难` | 按难度筛 |
-| `--exclude KEY` | 排除某个 case（可重复） |
-| `--limit N` | 最多跑 N 个 |
-| `--pick` | 交互式菜单，按版本分组选 |
-| `--list` | 只列出将运行的 case，不执行 |
-
-候选池来自 `config/case_metadata.json`。想换成官网全量（约 163 个）就跑 `python fetch_cases.py`，或直接编辑这个 JSON 增删、改难度。重新拉取时会保留已有的 `domain`/`difficulty`。
-
-## 报告里有什么
-
-报告分七个章节：
-
-| 章节 | 内容 |
-|------|------|
-| 一、综合打分 | 通过率、总 token、API 请求数等核心指标 |
-| 二、按版本统计 | TB 2.1 / 3.0 分别的通过数、失败数、token 消耗 |
-| 三、按难度统计 | 易/中/难的通过情况 |
-| 四、按领域统计 | 各领域的通过情况 |
-| 五、详细结果 | 每个 case 的状态、reward、耗时、token 明细及日志链接 |
-| 六、Case 运行中间结果 | 每个 case 的 session/agent/verifier 日志尾部（折叠） |
-| **七、错误分析** | **失败原因分类、工具调用统计、Skills/Tools 优化建议** |
-
-### 错误分析详情
-
-第七章自动解析每个失败 case 的日志，输出：
-
-- **7.1 失败原因分类总览** — 按错误类别（轮次耗尽、编译错误、运行时错误、Verifier 拒绝、逻辑错误、环境错误、Agent 崩溃等）统计数量与占比，关联优化方向
-- **7.2 各 Case 错误详情** — 每个 case 的具体错误原因、证据日志片段、该 case 的工具调用统计（调用次数/出错次数/错误率）
-- **7.3 全局工具调用统计** — 汇总失败 case vs 通过 case 的各工具使用情况，识别高错误率工具
-- **7.4 Skills/Tools 优化建议** — 基于错误分类和工具统计，按预期收益排序给出具体改进方向
-
-这些分析直接指向 Agent 在通用 skills/tools 层面需要优化的环节，作为迭代改进的量化依据。
-
-评测已经跑完、只想单独拉报告时：
+### 4. 运行评测
 
 ```bash
-python bin/fetch_report.py
+# 单个 benchmark
+python benchmark.py run -b tb-2.1
+python benchmark.py run -b tb-3.0
+python benchmark.py run -b tau2 --subset balanced_50
+python benchmark.py run -b gaia --subset level1_smoke
+
+# 全部四条线
+python benchmark.py run -b all --run-id unified-001
+
+# 预览不执行
+python benchmark.py run -b all --dry-run
+```
+
+### 5. 生成报告（每个 benchmark 独立）
+
+```bash
+python benchmark.py report -b tb-2.1 --run-id tb21-001
+python benchmark.py report -b tb-3.0 --run-id tb30-001
+python benchmark.py report -b tau2 --run-id tau2-balanced50
+python benchmark.py report -b gaia --run-id gaia-level1
+python benchmark.py report -b all --run-id unified-001
+```
+
+## CLI 速查
+
+```bash
+python benchmark.py run     -b <tb-2.1|tb-3.0|tau2|gaia|all>  [选项]
+python benchmark.py report  -b <同上>                          --run-id <ID>
+python benchmark.py list     -b <同上>
+python benchmark.py schema   -b <同上>                          # 查看数据格式和字段
+```
+
+### 常用选项
+
+| 选项 | 适用 | 说明 |
+|---|---|---|
+| `--cases, -c` | TB | 精确指定 case 名称（逗号分隔） |
+| `--difficulties, -d` | TB | 按难度筛（易,中,难） |
+| `--exclude` | TB | 排除某个 case |
+| `--limit, -n` | TB/GAIA | 最多跑 N 个 |
+| `--subset, -s` | tau2/GAIA | 子集名（如 quick_3, level1_smoke） |
+| `--run-id` | 全部 | 运行 ID（`-b all` 时自动加后缀） |
+| `--dry-run` | 全部 | 预览不执行 |
+| `--no-report` | 全部 | 跳过报告生成 |
+
+## 各 Benchmark 的数据格式
+
+用 `python benchmark.py schema -b all` 查看完整 schema。
+
+| Benchmark | 独有字段 | 报告章节 |
+|---|---|---|
+| tb-2.1 | verifier_stdout, verifier_stderr | 6 章（总分/难度/领域/详情/中间结果/错误分析） |
+| tb-3.0 | + docker_cp_path, overlay_image, bind_mount_path | 7 章（多容器隔离审计） |
+| tau2 | db_check_pass, assertion_pass, user_messages, tool_calls | 5 章（含失败快照） |
+| gaia | score(0-1), is_correct, file_count, search_count | 5 章（按 level 分组） |
+
+## 报告目录
+
+```
+reports/
+├── tb-2.1/<run-id>/report.md       # TB 2.1 报告
+├── tb-3.0/<run-id>/report.md       # TB 3.0 报告
+├── tau2/<run-id>/report.md         # tau2 报告
+└── gaia/<run-id>/report.md         # GAIA 报告
+```
+
+## 目录结构
+
+```
+├── benchmark.py               # 统一 CLI 入口
+├── src/orchestrator.py         # 四线调度器
+├── setup_local.ps1             # 本地环境配置（tau2/GAIA）
+├── setup.sh                    # 服务器初始化（TB）
+├── requirements.txt            # 合并依赖
+│
+├── bin/                        # 远程触发脚本（TB）
+├── config/                     # TB 配置（case_metadata.json, benchmark.yaml）
+├── configs/                    # tau2/GAIA 子集配置
+├── scripts/                    # tau2/GAIA 脚本
+├── adapters/                   # tau2 适配器
+│
+├── workspaces/
+│   ├── terminal_bench/         # TB workspace（bash/read/write/edit 工具）
+│   └── gaia/                   # GAIA workspace
+│
+├── run_all_cases.py            # TB 评测主控
+├── generate_report.py          # TB 报告生成
+├── fetch_cases.py              # TB case 拉取
+└── build_images.sh             # Docker 镜像构建
+```
+
+## 环境变量
+
+### `.env`（远程 TB）
+
+```env
+TB_BENCH_HOST=your.server.ip
+TB_BENCH_USER=root
+TB_BENCH_KEY=~/.ssh/id_ed25519
+TB_BENCH_WORKDIR=/root/psi-agent-benchmark
+```
+
+### `.env.local`（本地 tau2/GAIA，由 setup_local.ps1 生成）
+
+```env
+PSI_ROOT=C:\Users\...\psi-agent-main
+TAU2_ROOT=external/tau2-bench
+GAIA_DATA_ROOT=external/gaia-data
+PSI_AI_PROVIDER=openai
+PSI_AI_MODEL=deepseek-chat
+PSI_AI_BASE_URL=https://api.deepseek.com/v1
 ```
 
 ## 定时自动跑（可选）
 
-在服务器上加 cron，每天自动评测并把报告路径写进 `LATEST_REPORT.txt`：
+在服务器上加 cron：
 
 ```cron
 0 6 * * * cd /root/psi-agent-benchmark && bash bin/run_benchmark.sh >> pilot_results/cron.log 2>&1
 ```
 
-别人配好自己机器的 `.env` 后，随时 `python bin/fetch_report.py` 就能取报告。想直接发到 GitHub，设 `GITHUB_TOKEN` 后跑 `bash bin/auto_bench.sh`，报告会推到独立的 `reports` 分支，不动 `main`。
-
-## 目录
-
-```text
-├── case_metadata.json       # case 列表（唯一数据源）
-├── config/benchmark.yaml    # 运行时参数
-├── bin/
-│   ├── trigger_benchmark.py # 本机触发远程评测 + 下载报告
-│   ├── fetch_report.py      # 只拉最新报告
-│   └── run_benchmark.sh     # 服务器一键运行
-├── run_all_cases.py         # 评测主控
-├── generate_report.py       # 报告生成
-└── setup.sh                 # 服务器初始化
-```
+发到 GitHub reports 分支：设 `GITHUB_TOKEN` 后 `bash bin/auto_bench.sh`。
