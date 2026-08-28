@@ -104,17 +104,17 @@ class PsiAgent(BaseInstalledAgent):
                 WORKSPACE_IN_CONTAINER,
             )
 
-        # 5. Write .env with model credentials
-        env_lines = [
-            f"PSI_AI_PROVIDER={os.environ.get('PSI_AI_PROVIDER', 'openai')}",
-            f"PSI_AI_MODEL={os.environ.get('PSI_AI_MODEL', 'glm-5.3-max')}",
-            f"PSI_AI_API_KEY={os.environ.get('PSI_AI_API_KEY', '')}",
-            f"PSI_AI_BASE_URL={os.environ.get('PSI_AI_BASE_URL', '')}",
-        ]
-        env_content = "\n".join(env_lines) + "\n"
+        # 5. Write .env using container env vars (set by --agent-env / --ae)
+        #    Unquoted heredoc so shell expands ${VAR:-default} inside container
+        env_content = (
+            "PSI_AI_PROVIDER=${PSI_AI_PROVIDER:-openai}\n"
+            "PSI_AI_MODEL=${PSI_AI_MODEL:-glm-5.3-max}\n"
+            "PSI_AI_API_KEY=${PSI_AI_API_KEY:-}\n"
+            "PSI_AI_BASE_URL=${PSI_AI_BASE_URL:-}\n"
+        )
         await self.exec_as_agent(
             environment,
-            command=f"cat > {PSI_HOME}/.env << 'PSI_EOF'\n{env_content}PSI_EOF",
+            command=f"cat > {PSI_HOME}/.env << PSI_EOF\n{env_content}PSI_EOF",
         )
 
         # 6. Prepare socket + result dirs

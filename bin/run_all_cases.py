@@ -32,6 +32,23 @@ CONFIG_PATH = WORKDIR / "config" / "benchmark.yaml"
 CASE_META = WORKDIR / "config" / "case_metadata.json"
 HARBOR_BIN = os.environ.get("TB_HARBOR_BIN", "harbor")
 AGENT_IMPORT = "adapters.terminal_bench.harbor_agent:PsiAgent"
+
+
+def _load_env():
+    """Load .env from WORKDIR so --ae flags get real values."""
+    env_file = WORKDIR / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, val = line.partition("=")
+            os.environ.setdefault(key.strip(), val.strip())
+
+
+_load_env()
 MODEL = os.environ.get("PSI_AI_MODEL", "glm-5.3-max")
 
 
@@ -80,8 +97,7 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
         "--model", f"openai/{MODEL}",
         "--jobs-dir", str(job_dir),
         "--n-concurrent", "1",
-        "--task", case_name,
-        "--timeout", str(timeout),
+        "--include-task-name", case_name,
     ]
 
     env_keys = [
