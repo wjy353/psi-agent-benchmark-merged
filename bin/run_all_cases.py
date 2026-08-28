@@ -22,24 +22,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-WORKDIR = Path(os.environ.get(
-    "TB_BENCH_WORKDIR",
-    f"{os.environ.get('HOME', '/root')}/psi-agent-benchmark",
-))
-TASKS_DIR = WORKDIR / "tasks"
-JOBS_DIR = WORKDIR / "jobs"
-CONFIG_PATH = WORKDIR / "config" / "benchmark.yaml"
-CASE_META = WORKDIR / "config" / "case_metadata.json"
 HARBOR_BIN = os.environ.get("TB_HARBOR_BIN", "harbor")
 AGENT_IMPORT = "adapters.terminal_bench.harbor_agent:PsiAgent"
 
 
-def _load_env():
-    """Load .env from WORKDIR so --ae flags get real values."""
-    env_file = WORKDIR / ".env"
-    if not env_file.exists():
+def _load_env(path):
+    """Load .env from given path, setting env vars with setdefault."""
+    if not path.exists():
         return
-    for line in env_file.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -48,7 +39,22 @@ def _load_env():
             os.environ.setdefault(key.strip(), val.strip())
 
 
-_load_env()
+# Bootstrap: load .env from cwd or known locations before computing WORKDIR
+for _candidate in [Path.cwd() / ".env",
+                   Path.home() / "psi-agent-bench-v2" / ".env",
+                   Path.home() / "psi-agent-benchmark" / ".env"]:
+    if _candidate.exists():
+        _load_env(_candidate)
+        break
+
+WORKDIR = Path(os.environ.get(
+    "TB_BENCH_WORKDIR",
+    f"{os.environ.get('HOME', '/root')}/psi-agent-benchmark",
+))
+TASKS_DIR = WORKDIR / "tasks"
+JOBS_DIR = WORKDIR / "jobs"
+CONFIG_PATH = WORKDIR / "config" / "benchmark.yaml"
+CASE_META = WORKDIR / "config" / "case_metadata.json"
 MODEL = os.environ.get("PSI_AI_MODEL", "glm-5.3-max")
 
 
