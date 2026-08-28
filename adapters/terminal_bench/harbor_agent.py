@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import textwrap
 from pathlib import Path
 
@@ -100,26 +99,10 @@ class PsiAgent(BaseInstalledAgent):
         )
         workspace_host_path = Path(workspace_host)
         if workspace_host_path.exists():
-            tar_path = "/tmp/psi-workspace.tar"
-            shutil.make_archive(
-                "/tmp/psi-workspace",
-                "tar",
-                root_dir=str(workspace_host_path),
+            await environment.upload_dir(
+                str(workspace_host_path),
+                WORKSPACE_IN_CONTAINER,
             )
-            # docker cp via exec_as_root (harbor environment may have copy method)
-            await self._copy_into_container(
-                environment,
-                host_path=tar_path,
-                container_path=tar_path,
-            )
-            await self.exec_as_agent(
-                environment,
-                command=(
-                    f"tar xf {tar_path} -C {WORKSPACE_IN_CONTAINER} "
-                    f"&& rm {tar_path}"
-                ),
-            )
-            os.unlink(tar_path) if os.path.exists(tar_path) else None
 
         # 5. Write .env with model credentials
         env_lines = [
@@ -248,30 +231,3 @@ class PsiAgent(BaseInstalledAgent):
         )
 
     # ── Helpers ─────────────────────────────────────────────────────────
-
-    async def _copy_into_container(
-        self,
-        environment: BaseEnvironment,
-        host_path: str,
-        container_path: str,
-    ) -> None:
-        """Copy a file from the host into the container.
-
-        Tries environment.copy_to_container first, falls back to docker cp.
-        """
-        copy_fn = getattr(environment, "copy_to_container", None)
-        if callable(copy_fn):
-            await copy_fn(host_path, container_path)
-        else:
-            container_id = getattr(environment, "container_id", "")
-            if not container_id:
-                container_id = getattr(environment, "container_name", "")
-            if container_id:
-                import subprocess
-
-                subprocess.run(
-                    ["docker", "cp", host_path, f"{container_id}:{container_path}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
