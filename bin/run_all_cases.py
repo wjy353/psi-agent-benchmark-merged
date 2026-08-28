@@ -138,17 +138,29 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
 
 
 def _find_result_json(job_dir):
-    """Find the latest result.json in the job directory."""
+    """Find the trial-level result.json (has verifier_result.rewards.reward)."""
     if not job_dir.exists():
         return None
-    candidates = sorted(job_dir.rglob("result.json"), reverse=True)
-    if not candidates:
-        return None
-    try:
-        with open(candidates[0], encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return None
+    # Collect all result.json files, prefer trial-level (deeper paths)
+    candidates = sorted(job_dir.rglob("result.json"),
+                        key=lambda p: len(p.parts), reverse=True)
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            # Trial-level result.json has verifier_result with rewards
+            if "verifier_result" in data:
+                return data
+        except (json.JSONDecodeError, OSError):
+            continue
+    # Fallback: return the first result.json found
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
 
 
 def main():
@@ -211,7 +223,11 @@ def main():
 
         result = run_harbor(name, ver, run_id, jobs_dir, args.timeout)
         if result:
-            reward = result.get("reward", result.get("success", 0))
+            # Trial-level result.json: verifier_result.rewards.reward
+            vres = result.get("verifier_result", {})
+            reward = vres.get("rewards", {}).get("reward",
+                   result.get("reward",
+                   result.get("success", 0)))
             if isinstance(reward, bool):
                 reward = int(reward)
             passed += 1 if reward else 0
