@@ -31,7 +31,6 @@ from pathlib import Path
 from harbor.agents.installed.base import BaseInstalledAgent
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
-from harbor.utils.templating import with_prompt_template
 
 # In-container paths (must match psi-agent's expectations)
 PSI_HOME = "/opt/psi-agent"
@@ -143,7 +142,6 @@ class PsiAgent(BaseInstalledAgent):
 
     # ── Phase 2: Run ───────────────────────────────────────────────────
 
-    @with_prompt_template
     async def run(
         self,
         instruction: str,
@@ -248,33 +246,6 @@ class PsiAgent(BaseInstalledAgent):
             environment,
             command=f"chmod +x {script_path} && {script_path}",
         )
-
-    # ── Phase 3: Post-run (optional, parse tokens/cost) ────────────────
-
-    async def post_run(
-        self,
-        environment: BaseEnvironment,
-        context: AgentContext,
-    ) -> None:
-        """Parse agent logs for token usage and cost, report to Harbor."""
-        log_path = f"{RESULTS_DIR}/agent_output.log"
-        result = await self.exec_as_agent(
-            environment,
-            command=f"cat {log_path} 2>/dev/null || echo ''",
-        )
-        stdout = result.stdout if hasattr(result, "stdout") else str(result)
-
-        # Parse token usage (psi-agent logs total tokens at the end)
-        token_match = re.search(
-            r"total_tokens[\":\s]+(\d+)", stdout
-        )
-        if token_match:
-            context.report_tokens(total=int(token_match.group(1)))
-
-        # Parse cost (if logged)
-        cost_match = re.search(r"cost[\":\s\$]+([0-9.]+)", stdout)
-        if cost_match:
-            context.report_cost(usd=float(cost_match.group(1)))
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
