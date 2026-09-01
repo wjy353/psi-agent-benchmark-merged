@@ -235,13 +235,14 @@ class PsiAgent(BaseInstalledAgent):
             case = os.environ.get("PSI_AGENT_CASE", "")
             workdir = os.environ.get("TB_BENCH_WORKDIR", "/root/psi-agent-bench-v2")
             try:
-                _out = await self.exec_as_agent(
-                    environment, "cat /opt/psi-agent/results/ai.log 2>/dev/null"
-                )
-                if case and _out:
-                    _dir = Path(workdir) / "pilot_results" / case
-                    _dir.mkdir(parents=True, exist_ok=True)
-                    (_dir / "ai.log").write_text(str(_out))
+                for _log in ("ai.log", "session.log", "agent_output.log"):
+                    _out = await self.exec_as_agent(
+                        environment, f"cat /opt/psi-agent/results/{_log} 2>/dev/null"
+                    )
+                    if case and _out:
+                        _dir = Path(workdir) / "pilot_results" / case
+                        _dir.mkdir(parents=True, exist_ok=True)
+                        (_dir / _log).write_text(str(_out))
             except Exception:
                 pass
 
