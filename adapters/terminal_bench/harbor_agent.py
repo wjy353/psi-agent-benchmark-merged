@@ -76,7 +76,16 @@ class PsiAgent(BaseInstalledAgent):
             ),
         )
 
-        # 2. Clone psi-agent (shallow, specific ref)
+        # 2. Ensure git (TB3 slim containers may lack it), then clone psi-agent
+        await self.exec_as_agent(
+            environment,
+            command=(
+                "command -v git >/dev/null 2>&1 || "
+                "(apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq git >/dev/null 2>&1) || "
+                "(apk add --no-cache git >/dev/null 2>&1) || "
+                "true"
+            ),
+        )
         await self.exec_as_agent(
             environment,
             command=f"rm -rf {PSI_HOME} && git clone --depth 1 --branch {ref} {repo} {PSI_HOME}",

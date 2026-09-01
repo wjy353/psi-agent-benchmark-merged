@@ -98,7 +98,11 @@ def load_cases(versions=None, cases=None, exclude=None, difficulties=None, limit
 
 def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
     """Run a single case via harbor, return the result dict."""
-    dataset = f"terminal-bench@{'2.0' if version == '2.1' else '3.0'}"
+    if version == "2.1":
+        dataset = "terminal-bench@2.0"
+    else:
+        # TB3 的正确注册标识（legacy terminal-bench@3.0 不存在于注册表）
+        dataset = "terminal-bench/terminal-bench@3.0.0"
     job_dir = jobs_dir / f"{run_id}" / case_name.replace("/", "_")
 
     cmd = [
@@ -108,7 +112,7 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
         "--model", f"openai/{MODEL}",
         "--jobs-dir", str(job_dir),
         "--n-concurrent", "1",
-        "--include-task-name", case_name,
+        "--include-task-name", (f"terminal-bench/{case_name}" if version == "3.0" else case_name),
     ]
 
     env_keys = [
