@@ -121,8 +121,12 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
         val = os.environ.get(key)
         if val:
             cmd.extend(["--ae", f"{key}={val}"])
+    # 让 adapter 知道当前 case 名（用于保存 ai.log 到 pilot_results）
+    cmd.extend(["--ae", f"PSI_AGENT_CASE={case_name}"])
 
     print(f"  [harbor] {' '.join(cmd)}")
+    # 让 harbor 子进程（含 adapter）知道当前 case 名，用于保存 ai.log 到 pilot_results
+    os.environ["PSI_AGENT_CASE"] = case_name
     # Harbor subprocess needs repo root in PYTHONPATH for adapter imports
     env = os.environ.copy()
     repo_root = str(Path(__file__).resolve().parent.parent)

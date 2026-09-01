@@ -717,6 +717,9 @@ def load_harbor_results(run_id, version_filter=None):
             continue
 
         task_id = result.get("task_id", result_path.parent.name)
+        # 新版 Harbor result.json 的 task_id 是 dict（含 path），归一化为字符串
+        if isinstance(task_id, dict):
+            task_id = task_id.get("path") or task_id.get("name") or ""
         name = task_id.split("/")[-1]
 
         # Determine version from metadata or task_id

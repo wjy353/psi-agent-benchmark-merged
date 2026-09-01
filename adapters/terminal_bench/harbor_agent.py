@@ -225,9 +225,24 @@ class PsiAgent(BaseInstalledAgent):
             environment,
             command=f"cat > {script_path} << 'PSI_EOF'\n{script}PSI_EOF",
         )
-        await self.exec_as_agent(
-            environment,
-            command=f"chmod +x {script_path} && {script_path}",
-        )
+        try:
+            await self.exec_as_agent(
+                environment,
+                command=f"chmod +x {script_path} && {script_path}",
+            )
+        finally:
+            # 保存容器内 ai.log 到 pilot_results/<case>/，供 generate_report 解析真实 usage
+            case = os.environ.get("PSI_AGENT_CASE", "")
+            workdir = os.environ.get("TB_BENCH_WORKDIR", "/root/psi-agent-bench-v2")
+            try:
+                _out = await self.exec_as_agent(
+                    environment, "cat /opt/psi-agent/results/ai.log 2>/dev/null"
+                )
+                if case and _out:
+                    _dir = Path(workdir) / "pilot_results" / case
+                    _dir.mkdir(parents=True, exist_ok=True)
+                    (_dir / "ai.log").write_text(str(_out))
+            except Exception:
+                pass
 
     # ── Helpers ─────────────────────────────────────────────────────────
