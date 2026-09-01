@@ -115,6 +115,7 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
         "PSI_AI_API_KEY", "PSI_AI_BASE_URL", "PSI_AI_PROVIDER",
         "PSI_AI_MODEL", "PSI_AGENT_REPO", "PSI_AGENT_REF",
         "PSI_AGENT_WORKSPACE",
+        "PSI_AI_REASONING_EFFORT",
     ]
     for key in env_keys:
         val = os.environ.get(key)
