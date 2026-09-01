@@ -297,17 +297,35 @@ class PsiAgentTau2Adapter(HalfDuplexAgent[PsiAgentState]):
         )
         response.raise_for_status()
         chunks = []
-        for line in response.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data:"):
-                continue
-            data = line[5:].strip()
+        # SSE events can carry multi-line data (JSON containing literal newlines
+        # arrives split across several "data:" lines). Accumulate until a blank
+        # line (event boundary), then parse the joined payload. Tolerate
+        # malformed events instead of crashing the whole simulation.
+        data_lines: list[str] = []
+
+        def _flush(data_lines: list[str]) -> None:
+            if not data_lines:
+                return
+            data = "\n".join(data_lines)
             if data == "[DONE]":
-                break
-            event = json.loads(data)
+                return
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                return
             for choice in event.get("choices", []):
                 delta = choice.get("delta") or {}
                 if delta.get("content"):
                     chunks.append(delta["content"])
+
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                _flush(data_lines)
+                data_lines = []
+                continue
+            if line.startswith("data:"):
+                data_lines.append(line[5:].strip())
+        _flush(data_lines)
         return "".join(chunks).strip()
 
     def _parse_response(self, raw_response: str) -> AssistantMessage:
