@@ -276,10 +276,12 @@ def main():
         result = run_harbor(name, ver, run_id, jobs_dir, args.timeout)
         if result:
             # Trial-level result.json: verifier_result.rewards.reward
-            vres = result.get("verifier_result", {})
-            reward = vres.get("rewards", {}).get("reward",
-                   result.get("reward",
-                   result.get("success", 0)))
+            # 注意 rewards 可能为 null（errored trial），需判空
+            vres = result.get("verifier_result") or {}
+            rewards = vres.get("rewards") or {}
+            reward = rewards.get("reward",
+                     result.get("reward",
+                     result.get("success", 0)))
             if isinstance(reward, bool):
                 reward = int(reward)
             passed += 1 if reward else 0
