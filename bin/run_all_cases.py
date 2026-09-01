@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 from datetime import datetime
@@ -96,7 +97,7 @@ def load_cases(versions=None, cases=None, exclude=None, difficulties=None, limit
     return selected
 
 
-def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
+def run_harbor(case_name, version, run_id, jobs_dir, timeout=18000):
     """Run a single case via harbor, return the result dict."""
     if version == "2.1":
         dataset = "terminal-bench@2.0"
@@ -135,15 +136,57 @@ def run_harbor(case_name, version, run_id, jobs_dir, timeout=2400):
     env = os.environ.copy()
     repo_root = str(Path(__file__).resolve().parent.parent)
     env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 120, env=env)
+    # Popen + start_new_session: 让 harbor 成为进程组领导，超时可用 killpg 杀整棵进程树，
+    # 避免 subprocess.run 只杀直接子进程而留下孤儿 docker 容器继续烧额度。
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout + 120)
+    except subprocess.TimeoutExpired:
+        # 安全网触发：杀整个进程组 + 清理该 case 的容器（best-effort），不崩溃、继续后续 case
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=30)
+        except Exception:
+            pass
+        _stop_case_containers(case_name)
+        print(f"  [harbor] TIMEOUT after {timeout}s (safety net) — killed process group and containers")
+        return None
 
-    if result.returncode != 0:
-        print(f"  [harbor] FAILED (rc={result.returncode})")
-        if result.stderr:
-            print(f"  [harbor] stderr: {result.stderr[-500:]}")
+    if proc.returncode != 0:
+        print(f"  [harbor] FAILED (rc={proc.returncode})")
+        if stderr:
+            print(f"  [harbor] stderr: {stderr[-500:]}")
 
     result_json = _find_result_json(job_dir)
     return result_json
+
+
+def _stop_case_containers(case_name):
+    """Best-effort kill any running containers whose name matches the case."""
+    try:
+        ps = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        for name in ps.stdout.splitlines():
+            if case_name in name:
+                subprocess.run(["docker", "kill", name], capture_output=True, timeout=30)
+                print(f"  [harbor] killed orphan container: {name}")
+    except Exception as exc:
+        print(f"  [harbor] WARNING: orphan container cleanup failed: {exc}")
 
 
 def _find_result_json(job_dir):
@@ -188,8 +231,8 @@ def main():
                         help="List cases and exit")
     parser.add_argument("--run-id", default=None,
                         help="Run identifier for job directory")
-    parser.add_argument("--timeout", type=int, default=2400,
-                        help="Per-case timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=18000,
+                        help="Safety-net timeout in seconds (real per-task timeout is enforced by Harbor via task.toml)")
     args = parser.parse_args()
 
     cases = load_cases(
