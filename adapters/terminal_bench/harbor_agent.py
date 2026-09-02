@@ -73,8 +73,8 @@ class PsiAgent(BaseInstalledAgent):
             command=(
                 "command -v python3 >/dev/null 2>&1 || "
                 "(apt-get update -qq >/dev/null 2>&1 && "
-                "apt-get install -y -qq python3 python3-pip >/dev/null 2>&1) || "
-                "(apk add --no-cache python3 py3-pip >/dev/null 2>&1) || "
+                "apt-get install -y -qq python3 python3-pip curl >/dev/null 2>&1) || "
+                "(apk add --no-cache python3 py3-pip curl >/dev/null 2>&1) || "
                 "true"
             ),
         )
@@ -84,7 +84,8 @@ class PsiAgent(BaseInstalledAgent):
             environment,
             command=(
                 "command -v uv >/dev/null 2>&1 || "
-                "(pip3 install --quiet uv 2>/dev/null || pip install --quiet uv 2>/dev/null) || "
+                "(pip3 install --break-system-packages --quiet uv 2>/dev/null || "
+                " pip install --break-system-packages --quiet uv 2>/dev/null) || "
                 "(curl -LsSf https://astral.sh/uv/install.sh 2>/dev/null | sh 2>/dev/null "
                 "&& ln -sf $HOME/.local/bin/uv /usr/local/bin/uv)"
             ),
