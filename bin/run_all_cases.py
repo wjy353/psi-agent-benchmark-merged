@@ -190,28 +190,54 @@ def _stop_case_containers(case_name):
 
 
 def _find_result_json(job_dir):
-    """Find the trial-level result.json (has verifier_result.rewards.reward)."""
+    """Find the most recent trial result.json that actually scored a reward.
+
+    A case accumulates multiple trials when infra bugs force re-runs (e.g.
+    install-windows-3.11, prove-plus-comm). An old errored trial also carries
+    a ``verifier_result`` key (usually null), so keying on presence alone
+    returned a stale result and reported reward=0 even after a re-run passed.
+    Prefer, in order: newest trial with a real reward > newest trial that ran
+    the verifier > any newest result.json. "Newest" = highest file mtime.
+    """
     if not job_dir.exists():
         return None
-    # Collect all result.json files, prefer trial-level (deeper paths)
-    candidates = sorted(job_dir.rglob("result.json"),
-                        key=lambda p: len(p.parts), reverse=True)
-    for path in candidates:
+
+    def _read(path):
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-            # Trial-level result.json has verifier_result with rewards
-            if "verifier_result" in data:
-                return data
+            return json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
-            continue
-    # Fallback: return the first result.json found
-    for path in candidates:
+            return None
+
+    def _sort_key(path):
         try:
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    candidates = sorted(job_dir.rglob("result.json"), key=_sort_key, reverse=True)
+
+    # 1) newest trial with a real scored reward
+    for path in candidates:
+        data = _read(path)
+        if data is None:
             continue
+        vr = data.get("verifier_result") or {}
+        if (vr.get("rewards") or {}).get("reward") is not None:
+            return data
+
+    # 2) newest trial that reached the verifier (verifier_result not null)
+    for path in candidates:
+        data = _read(path)
+        if data is None:
+            continue
+        if data.get("verifier_result") is not None:
+            return data
+
+    # 3) anything at all
+    for path in candidates:
+        data = _read(path)
+        if data is not None:
+            return data
     return None
 
 
