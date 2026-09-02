@@ -65,16 +65,28 @@ class PsiAgent(BaseInstalledAgent):
             str(Path.cwd() / "workspaces" / "terminal_bench"),
         )
 
-        # 0. Ensure python3 + pip exist — some task images are non-Python
-        #    (e.g. overfull-hbox is a bare LaTeX image), so the uv bootstrap
-        #    below would otherwise fail on the very first pip/curl command.
+        # 0. Ensure python3, pip3 and curl exist. Some task images are
+        #    non-Python (bare LaTeX), others ship python3 WITHOUT pip3
+        #    (Ubuntu 24.04's pip is the separate python3-pip package), and
+        #    prove-plus-comm has neither pip3 nor curl — so check each
+        #    individually instead of gating everything on python3.
         await self.exec_as_root(
             environment,
             command=(
                 "command -v python3 >/dev/null 2>&1 || "
                 "(apt-get update -qq >/dev/null 2>&1 && "
-                "apt-get install -y -qq python3 python3-pip curl >/dev/null 2>&1) || "
-                "(apk add --no-cache python3 py3-pip curl >/dev/null 2>&1) || "
+                "apt-get install -y -qq python3 >/dev/null 2>&1) || "
+                "(apk add --no-cache python3 >/dev/null 2>&1) || "
+                "true"
+            ),
+        )
+        await self.exec_as_root(
+            environment,
+            command=(
+                "command -v pip3 >/dev/null 2>&1 || "
+                "(apt-get update -qq >/dev/null 2>&1 && "
+                "apt-get install -y -qq python3-pip curl >/dev/null 2>&1) || "
+                "(apk add --no-cache py3-pip curl >/dev/null 2>&1) || "
                 "true"
             ),
         )
