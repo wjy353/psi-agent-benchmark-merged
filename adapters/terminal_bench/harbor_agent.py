@@ -65,13 +65,27 @@ class PsiAgent(BaseInstalledAgent):
             str(Path.cwd() / "workspaces" / "terminal_bench"),
         )
 
+        # 0. Ensure python3 + pip exist — some task images are non-Python
+        #    (e.g. overfull-hbox is a bare LaTeX image), so the uv bootstrap
+        #    below would otherwise fail on the very first pip/curl command.
+        await self.exec_as_root(
+            environment,
+            command=(
+                "command -v python3 >/dev/null 2>&1 || "
+                "(apt-get update -qq >/dev/null 2>&1 && "
+                "apt-get install -y -qq python3 python3-pip >/dev/null 2>&1) || "
+                "(apk add --no-cache python3 py3-pip >/dev/null 2>&1) || "
+                "true"
+            ),
+        )
+
         # 1. Ensure uv is available (can install Python 3.14)
         await self.exec_as_root(
             environment,
             command=(
-                "pip install --quiet uv 2>/dev/null "
-                "|| pip3 install --quiet uv 2>/dev/null "
-                "|| (curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null "
+                "command -v uv >/dev/null 2>&1 || "
+                "(pip3 install --quiet uv 2>/dev/null || pip install --quiet uv 2>/dev/null) || "
+                "(curl -LsSf https://astral.sh/uv/install.sh 2>/dev/null | sh 2>/dev/null "
                 "&& ln -sf $HOME/.local/bin/uv /usr/local/bin/uv)"
             ),
         )
